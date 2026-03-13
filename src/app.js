@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const { connectDB } = require('./config/database');
 const analysisRoutes = require('./routes/analysisRoutes');
+const communityRoutes = require('./routes/communityRoutes');
 
 const app = express();
 
@@ -15,7 +16,7 @@ connectDB();
 
 // Middleware
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow serving images
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -27,6 +28,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 app.use('/api/analysis', analysisRoutes);
+app.use('/api/community', communityRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -47,7 +49,6 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('Error:', err.stack);
   
-  // Handle multer errors
   if (err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
   }
@@ -61,6 +62,5 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
   });
 });
-
 
 module.exports = app;

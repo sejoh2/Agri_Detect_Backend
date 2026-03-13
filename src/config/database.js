@@ -30,10 +30,32 @@ const connectDB = async () => {
     await sequelize.authenticate();
     console.log('✅ PostgreSQL Connected Successfully');
     
+    // Import models to register them with Sequelize
+    const Post = require('../models/Post');
+    const Comment = require('../models/Comment');
+    const Analysis = require('../models/Analysis');
+    
+    // Define associations
+    Post.hasMany(Comment, { foreignKey: 'postId', onDelete: 'CASCADE' });
+    Comment.belongsTo(Post, { foreignKey: 'postId' });
+    
+    console.log('✅ Models registered:', {
+      Post: !!Post,
+      Comment: !!Comment,
+      Analysis: !!Analysis
+    });
+    
     // Sync models in development (creates tables if they don't exist)
     if (process.env.NODE_ENV === 'development') {
       await sequelize.sync({ alter: true });
-      console.log('✅ Database synced');
+      console.log('✅ Database synced - All tables created/updated');
+      
+      // List all tables
+      const [results] = await sequelize.query(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
+      );
+      const tables = results.map(r => r.table_name).join(', ');
+      console.log('📊 Tables in database:', tables);
     }
   } catch (error) {
     console.error('❌ Database connection error:', error);
