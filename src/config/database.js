@@ -35,6 +35,7 @@ const connectDB = async () => {
     const Post = require('../models/Post');
     const Comment = require('../models/Comment');
     const Analysis = require('../models/Analysis');
+    const Helpful = require('../models/Helpful');
     
     // Define associations
     Post.hasMany(Comment, { foreignKey: 'postId', onDelete: 'CASCADE' });
@@ -43,11 +44,12 @@ const connectDB = async () => {
     // Note: User model doesn't have associations yet, but can be added later
     
     console.log('✅ Models registered:', {
-      User: !!User,
-      Post: !!Post,
-      Comment: !!Comment,
-      Analysis: !!Analysis
-    });
+  User: !!User,
+  Post: !!Post,
+  Comment: !!Comment,
+  Helpful: !!Helpful,
+  Analysis: !!Analysis
+});
     
     // Sync models in development (creates tables if they don't exist)
     if (process.env.NODE_ENV === 'development') {

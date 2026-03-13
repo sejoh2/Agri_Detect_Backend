@@ -7,6 +7,11 @@ const Comment = sequelize.define('Comment', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true
   },
+  userId: {
+    type: DataTypes.STRING, // Firebase UID
+    allowNull: false,
+    comment: 'Firebase user ID'
+  },
   postId: {
     type: DataTypes.UUID,
     allowNull: false,

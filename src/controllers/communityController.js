@@ -1,19 +1,13 @@
-const { Post, Comment } = require('../models/index');
-const storageService = require('../services/storageService'); // Add this
+const { Post, Comment, Helpful } = require('../models/index');
+const storageService = require('../services/storageService');
 const fs = require('fs');
 const path = require('path');
-
-// Helper to create file URL - REMOVE THIS FUNCTION (we won't need it anymore)
-// const getFileUrl = (filename) => {
-//   if (!filename) return null;
-//   const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-//   return `${baseUrl}/uploads/${path.basename(filename)}`;
-// };
 
 // Create a new post
 const createPost = async (req, res) => {
   try {
     const { 
+      userId, // Added UID
       authorName, 
       authorLocation, 
       title, 
@@ -25,13 +19,17 @@ const createPost = async (req, res) => {
     
     const file = req.file;
 
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
     let postImageUrl = null;
     if (file) {
-      // Upload to Supabase and get public URL
       postImageUrl = await storageService.uploadFile(file, 'posts');
     }
 
     const post = await Post.create({
+      userId, // Store Firebase UID
       authorName: isAnonymous === 'true' ? 'Anonymous Farmer' : authorName,
       authorLocation: authorLocation || 'Unknown',
       authorImageUrl: null,
@@ -45,8 +43,10 @@ const createPost = async (req, res) => {
       commentCount: 0
     });
 
+    // FIXED: Added userId to the response
     res.status(201).json({
       id: post.id,
+      userId: post.userId, // ADD THIS LINE
       authorName: post.authorName,
       authorLocation: post.authorLocation,
       authorImageUrl: post.authorImageUrl,
@@ -64,7 +64,6 @@ const createPost = async (req, res) => {
   } catch (error) {
     console.error('Error creating post:', error);
     
-    // Clean up uploaded file if error occurred (though storageService already does this)
     if (req.file) {
       fs.unlink(req.file.path, (err) => {
         if (err) console.error('Error deleting file:', err);
@@ -78,10 +77,10 @@ const createPost = async (req, res) => {
   }
 };
 
-// Get all posts
+// Get all posts with user's helpful status
 const getPosts = async (req, res) => {
   try {
-    const { limit = 20, offset = 0, category, expert } = req.query;
+    const { limit = 20, offset = 0, category, expert, currentUserId } = req.query;
     
     const whereClause = {};
     if (category && category !== 'all') {
@@ -95,23 +94,45 @@ const getPosts = async (req, res) => {
       where: whereClause,
       order: [['createdAt', 'DESC']],
       limit: parseInt(limit),
-      offset: parseInt(offset)
+      offset: parseInt(offset),
+      include: [{
+        model: Comment,
+        limit: 3,
+        order: [['createdAt', 'DESC']]
+      }]
     });
 
-    const formattedPosts = posts.map(post => ({
-      id: post.id,
-      authorName: post.authorName,
-      authorLocation: post.authorLocation,
-      authorImageUrl: post.authorImageUrl,
-      timeAgo: _getTimeAgo(post.createdAt),
-      title: post.title,
-      content: post.content,
-      postImageUrl: post.postImageUrl,
-      helpfulCount: post.helpfulCount,
-      commentCount: post.commentCount,
-      isExpert: post.isExpert,
-      isLikedByCurrentUser: false,
-      category: post.category
+    // Get helpful status for each post if currentUserId is provided
+    const formattedPosts = await Promise.all(posts.map(async (post) => {
+      let isLikedByCurrentUser = false;
+      
+      if (currentUserId) {
+        const helpful = await Helpful.findOne({
+          where: {
+            userId: currentUserId,
+            postId: post.id,
+            type: 'post'
+          }
+        });
+        isLikedByCurrentUser = !!helpful;
+      }
+
+      return {
+        id: post.id,
+        userId: post.userId,
+        authorName: post.authorName,
+        authorLocation: post.authorLocation,
+        authorImageUrl: post.authorImageUrl,
+        timeAgo: _getTimeAgo(post.createdAt),
+        title: post.title,
+        content: post.content,
+        postImageUrl: post.postImageUrl,
+        helpfulCount: post.helpfulCount,
+        commentCount: post.commentCount,
+        isExpert: post.isExpert,
+        isLikedByCurrentUser: isLikedByCurrentUser,
+        category: post.category
+      };
     }));
 
     const total = await Post.count({ where: whereClause });
@@ -132,10 +153,11 @@ const getPosts = async (req, res) => {
   }
 };
 
-// Get single post by ID with comments
+// Get single post by ID with comments and helpful status
 const getPostById = async (req, res) => {
   try {
     const { id } = req.params;
+    const { currentUserId } = req.query;
     
     const post = await Post.findByPk(id, {
       include: [{
@@ -148,20 +170,51 @@ const getPostById = async (req, res) => {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    const formattedComments = post.Comments ? post.Comments.map(comment => ({
-      id: comment.id,
-      authorName: comment.authorName,
-      authorImageUrl: comment.authorImageUrl,
-      content: comment.content,
-      timestamp: comment.createdAt,
-      timeAgo: _getTimeAgo(comment.createdAt),
-      isExpert: comment.isExpert,
-      helpfulCount: comment.helpfulCount,
-      isLikedByCurrentUser: false
-    })) : [];
+    // Get helpful status for post
+    let isPostLikedByCurrentUser = false;
+    if (currentUserId) {
+      const postHelpful = await Helpful.findOne({
+        where: {
+          userId: currentUserId,
+          postId: post.id,
+          type: 'post'
+        }
+      });
+      isPostLikedByCurrentUser = !!postHelpful;
+    }
+
+    // Get helpful status for each comment
+    const formattedComments = await Promise.all((post.Comments || []).map(async (comment) => {
+      let isCommentLikedByCurrentUser = false;
+      
+      if (currentUserId) {
+        const commentHelpful = await Helpful.findOne({
+          where: {
+            userId: currentUserId,
+            commentId: comment.id,
+            type: 'comment'
+          }
+        });
+        isCommentLikedByCurrentUser = !!commentHelpful;
+      }
+
+      return {
+        id: comment.id,
+        userId: comment.userId,
+        authorName: comment.authorName,
+        authorImageUrl: comment.authorImageUrl,
+        content: comment.content,
+        timestamp: comment.createdAt,
+        timeAgo: _getTimeAgo(comment.createdAt),
+        isExpert: comment.isExpert,
+        helpfulCount: comment.helpfulCount,
+        isLikedByCurrentUser: isCommentLikedByCurrentUser
+      };
+    }));
 
     res.json({
       id: post.id,
+      userId: post.userId,
       authorName: post.authorName,
       authorLocation: post.authorLocation,
       authorImageUrl: post.authorImageUrl,
@@ -172,7 +225,7 @@ const getPostById = async (req, res) => {
       helpfulCount: post.helpfulCount,
       commentCount: post.commentCount,
       isExpert: post.isExpert,
-      isLikedByCurrentUser: false,
+      isLikedByCurrentUser: isPostLikedByCurrentUser,
       category: post.category,
       comments: formattedComments
     });
@@ -187,20 +240,55 @@ const getPostById = async (req, res) => {
 const togglePostHelpful = async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId } = req.body;
     
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
     const post = await Post.findByPk(id);
     
     if (!post) {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    post.helpfulCount += 1;
-    await post.save();
-
-    res.json({ 
-      helpfulCount: post.helpfulCount,
-      message: 'Post helpful count updated' 
+    // Check if user already liked this post
+    const existingHelpful = await Helpful.findOne({
+      where: {
+        userId,
+        postId: id,
+        type: 'post'
+      }
     });
+
+    if (existingHelpful) {
+      // Unlike: remove helpful record and decrement count
+      await existingHelpful.destroy();
+      post.helpfulCount -= 1;
+      await post.save();
+      
+      res.json({ 
+        helpfulCount: post.helpfulCount,
+        isLiked: false,
+        message: 'Post unliked' 
+      });
+    } else {
+      // Like: create helpful record and increment count
+      await Helpful.create({
+        userId,
+        postId: id,
+        type: 'post'
+      });
+      
+      post.helpfulCount += 1;
+      await post.save();
+
+      res.json({ 
+        helpfulCount: post.helpfulCount,
+        isLiked: true,
+        message: 'Post liked' 
+      });
+    }
 
   } catch (error) {
     console.error('Error toggling post helpful:', error);
@@ -212,8 +300,12 @@ const togglePostHelpful = async (req, res) => {
 const addComment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { content, authorName, isExpert } = req.body;
+    const { userId, content, authorName, isExpert } = req.body;
     
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
     const post = await Post.findByPk(id);
     
     if (!post) {
@@ -221,6 +313,7 @@ const addComment = async (req, res) => {
     }
 
     const comment = await Comment.create({
+      userId,
       postId: post.id,
       authorName: authorName || 'Anonymous',
       content,
@@ -234,6 +327,7 @@ const addComment = async (req, res) => {
 
     res.status(201).json({
       id: comment.id,
+      userId: comment.userId,
       authorName: comment.authorName,
       authorImageUrl: comment.authorImageUrl,
       content: comment.content,
@@ -254,20 +348,55 @@ const addComment = async (req, res) => {
 const toggleCommentHelpful = async (req, res) => {
   try {
     const { postId, commentId } = req.params;
+    const { userId } = req.body;
     
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
     const comment = await Comment.findByPk(commentId);
     
     if (!comment) {
       return res.status(404).json({ error: 'Comment not found' });
     }
 
-    comment.helpfulCount += 1;
-    await comment.save();
-
-    res.json({ 
-      helpfulCount: comment.helpfulCount,
-      message: 'Comment helpful count updated' 
+    // Check if user already liked this comment
+    const existingHelpful = await Helpful.findOne({
+      where: {
+        userId,
+        commentId,
+        type: 'comment'
+      }
     });
+
+    if (existingHelpful) {
+      // Unlike: remove helpful record and decrement count
+      await existingHelpful.destroy();
+      comment.helpfulCount -= 1;
+      await comment.save();
+      
+      res.json({ 
+        helpfulCount: comment.helpfulCount,
+        isLiked: false,
+        message: 'Comment unliked' 
+      });
+    } else {
+      // Like: create helpful record and increment count
+      await Helpful.create({
+        userId,
+        commentId,
+        type: 'comment'
+      });
+      
+      comment.helpfulCount += 1;
+      await comment.save();
+
+      res.json({ 
+        helpfulCount: comment.helpfulCount,
+        isLiked: true,
+        message: 'Comment liked' 
+      });
+    }
 
   } catch (error) {
     console.error('Error toggling comment helpful:', error);
@@ -286,7 +415,7 @@ const _getTimeAgo = (date) => {
   return `${Math.floor(diffInSeconds / 86400)} days ago`;
 };
 
-// Optional: Delete post with image
+// Delete post with image
 const deletePost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -297,7 +426,6 @@ const deletePost = async (req, res) => {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    // Delete image from Supabase if exists
     if (post.postImageUrl) {
       await storageService.deleteFile(post.postImageUrl);
     }
@@ -319,5 +447,5 @@ module.exports = {
   togglePostHelpful,
   addComment,
   toggleCommentHelpful,
-  deletePost // Export if you want to add delete route
+  deletePost
 };

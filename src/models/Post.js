@@ -7,6 +7,11 @@ const Post = sequelize.define('Post', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true
   },
+  userId: {
+    type: DataTypes.STRING, // Firebase UID
+    allowNull: false,
+    comment: 'Firebase user ID'
+  },
   authorName: {
     type: DataTypes.STRING,
     allowNull: false
