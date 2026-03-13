@@ -10,17 +10,17 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 class StorageService {
   // Upload file to Supabase Storage
-  async uploadFile(file, folder = 'posts') {
+  async uploadFile(file, folder = 'posts', bucket = 'agridetect-images') {
     try {
       const filePath = file.path;
       const fileName = `${folder}/${Date.now()}-${path.basename(filePath)}`;
       const fileContent = fs.readFileSync(filePath);
       
-      console.log('📤 Uploading to Supabase:', fileName);
+      console.log(`📤 Uploading to Supabase (bucket: ${bucket}):`, fileName);
       
       // Upload to Supabase
       const { data, error } = await supabase.storage
-        .from('agridetect-images') // Bucket name
+        .from(bucket)
         .upload(fileName, fileContent, {
           contentType: file.mimetype,
           cacheControl: '3600'
@@ -33,7 +33,7 @@ class StorageService {
 
       // Get public URL
       const { data: urlData } = supabase.storage
-        .from('agridetect-images')
+        .from(bucket)
         .getPublicUrl(fileName);
 
       const publicUrl = urlData.publicUrl;
@@ -49,7 +49,6 @@ class StorageService {
     } catch (error) {
       console.error('Error uploading to Supabase:', error);
       
-      // Try to clean up local file even if upload failed
       if (file && file.path) {
         fs.unlink(file.path, (err) => {
           if (err) console.error('Error deleting local file:', err);
@@ -61,22 +60,26 @@ class StorageService {
   }
 
   // Delete file from Supabase
-  async deleteFile(fileUrl) {
+  async deleteFile(fileUrl, bucket = 'agridetect-images') {
     try {
-      // Extract path from URL
-      // URL format: https://[project].supabase.co/storage/v1/object/public/agridetect-images/posts/filename
-      const urlParts = fileUrl.split('/agridetect-images/');
-      if (urlParts.length < 2) return;
+      // Extract path from URL based on bucket
+      const bucketPattern = new RegExp(`/${bucket}/(.+)$`);
+      const match = fileUrl.match(bucketPattern);
       
-      const filePath = urlParts[1];
+      if (!match || match.length < 2) {
+        console.log('Could not extract file path from URL:', fileUrl);
+        return;
+      }
+      
+      const filePath = match[1];
       
       const { error } = await supabase.storage
-        .from('agridetect-images')
+        .from(bucket)
         .remove([filePath]);
 
       if (error) throw error;
       
-      console.log('✅ File deleted from Supabase:', filePath);
+      console.log(`✅ File deleted from Supabase (bucket: ${bucket}):`, filePath);
     } catch (error) {
       console.error('Error deleting file from Supabase:', error);
     }

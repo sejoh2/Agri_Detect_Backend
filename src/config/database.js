@@ -31,6 +31,7 @@ const connectDB = async () => {
     console.log('✅ PostgreSQL Connected Successfully');
     
     // Import models to register them with Sequelize
+    const User = require('../models/User');
     const Post = require('../models/Post');
     const Comment = require('../models/Comment');
     const Analysis = require('../models/Analysis');
@@ -39,7 +40,10 @@ const connectDB = async () => {
     Post.hasMany(Comment, { foreignKey: 'postId', onDelete: 'CASCADE' });
     Comment.belongsTo(Post, { foreignKey: 'postId' });
     
+    // Note: User model doesn't have associations yet, but can be added later
+    
     console.log('✅ Models registered:', {
+      User: !!User,
       Post: !!Post,
       Comment: !!Comment,
       Analysis: !!Analysis

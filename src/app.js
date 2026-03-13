@@ -8,6 +8,7 @@ require('dotenv').config();
 const { connectDB } = require('./config/database');
 const analysisRoutes = require('./routes/analysisRoutes');
 const communityRoutes = require('./routes/communityRoutes');
+const userRoutes = require('./routes/userRoutes'); // ADD THIS
 
 const app = express();
 
@@ -23,12 +24,13 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan('dev'));
 
-// Static files - serve uploaded files
+// Static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/community', communityRoutes);
+app.use('/api/users', userRoutes); // ADD THIS
 
 // Health check
 app.get('/health', (req, res) => {
