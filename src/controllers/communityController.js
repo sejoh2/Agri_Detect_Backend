@@ -1,19 +1,17 @@
-const { Post, Comment, Helpful } = require('../models/index');
+const { Post, Comment, Helpful, User } = require('../models/index');
 const storageService = require('../services/storageService');
 const fs = require('fs');
 const path = require('path');
 
 // Create a new post
+// Create a new post
 const createPost = async (req, res) => {
   try {
     const { 
-      userId, // Added UID
-      authorName, 
-      authorLocation, 
+      userId,
       title, 
       content, 
       category,
-      isExpert,
       isAnonymous
     } = req.body;
     
@@ -23,41 +21,52 @@ const createPost = async (req, res) => {
       return res.status(400).json({ error: 'userId is required' });
     }
 
+    // Verify user exists in Users table
+    const user = await User.findOne({ where: { uid: userId } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     let postImageUrl = null;
     if (file) {
       postImageUrl = await storageService.uploadFile(file, 'posts');
     }
 
     const post = await Post.create({
-      userId, // Store Firebase UID
-      authorName: isAnonymous === 'true' ? 'Anonymous Farmer' : authorName,
-      authorLocation: authorLocation || 'Unknown',
-      authorImageUrl: null,
+      userId,
       title,
       content,
       postImageUrl,
       category: category || 'General',
-      isExpert: isExpert === 'true',
       isAnonymous: isAnonymous === 'true',
       helpfulCount: 0,
       commentCount: 0
     });
 
-    // FIXED: Added userId to the response
+    // Fetch the created post with user data
+    const createdPost = await Post.findByPk(post.id, {
+      include: [{
+        model: User,
+        attributes: ['name', 'location', 'avatarUrl', 'isExpert']
+      }]
+    });
+
     res.status(201).json({
-      id: post.id,
-      userId: post.userId, // ADD THIS LINE
-      authorName: post.authorName,
-      authorLocation: post.authorLocation,
-      authorImageUrl: post.authorImageUrl,
-      timeAgo: _getTimeAgo(post.createdAt),
-      title: post.title,
-      content: post.content,
-      postImageUrl: post.postImageUrl,
-      helpfulCount: post.helpfulCount,
-      commentCount: post.commentCount,
-      isExpert: post.isExpert,
-      category: post.category,
+      id: createdPost.id,
+      userId: createdPost.userId,
+      authorName: createdPost.User?.name || 'Anonymous',
+      authorLocation: createdPost.User?.location || 'Unknown',
+      authorImageUrl: createdPost.User?.avatarUrl,
+      isExpert: createdPost.User?.isExpert || false,
+      timeAgo: _getTimeAgo(createdPost.createdAt),
+      title: createdPost.title,
+      content: createdPost.content,
+      postImageUrl: createdPost.postImageUrl,
+      helpfulCount: createdPost.helpfulCount,
+      commentCount: createdPost.commentCount,
+      isExpert: createdPost.isExpert,
+      category: createdPost.category,
+      isAnonymous: createdPost.isAnonymous,
       comments: []
     });
 
@@ -76,7 +85,6 @@ const createPost = async (req, res) => {
     });
   }
 };
-
 // Get all posts with user's helpful status
 const getPosts = async (req, res) => {
   try {
@@ -86,9 +94,6 @@ const getPosts = async (req, res) => {
     if (category && category !== 'all') {
       whereClause.category = category;
     }
-    if (expert === 'true') {
-      whereClause.isExpert = true;
-    }
 
     const posts = await Post.findAll({
       where: whereClause,
@@ -96,9 +101,9 @@ const getPosts = async (req, res) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       include: [{
-        model: Comment,
-        limit: 3,
-        order: [['createdAt', 'DESC']]
+        model: User,
+        attributes: ['name', 'location', 'avatarUrl', 'isExpert'], // Join with Users table
+        required: true // Inner join - only posts from existing users
       }]
     });
 
@@ -120,18 +125,19 @@ const getPosts = async (req, res) => {
       return {
         id: post.id,
         userId: post.userId,
-        authorName: post.authorName,
-        authorLocation: post.authorLocation,
-        authorImageUrl: post.authorImageUrl,
+        authorName: post.User.name, // From Users table
+        authorLocation: post.User.location || 'Unknown',
+        authorImageUrl: post.User.avatarUrl, // From Users table
+        isExpert: post.User.isExpert, // From Users table
         timeAgo: _getTimeAgo(post.createdAt),
         title: post.title,
         content: post.content,
         postImageUrl: post.postImageUrl,
         helpfulCount: post.helpfulCount,
         commentCount: post.commentCount,
-        isExpert: post.isExpert,
         isLikedByCurrentUser: isLikedByCurrentUser,
-        category: post.category
+        category: post.category,
+        isAnonymous: post.isAnonymous
       };
     }));
 
@@ -154,16 +160,27 @@ const getPosts = async (req, res) => {
 };
 
 // Get single post by ID with comments and helpful status
+// Get single post by ID with comments
 const getPostById = async (req, res) => {
   try {
     const { id } = req.params;
     const { currentUserId } = req.query;
     
     const post = await Post.findByPk(id, {
-      include: [{
-        model: Comment,
-        order: [['createdAt', 'DESC']]
-      }]
+      include: [
+        { 
+          model: User,
+          attributes: ['name', 'location', 'avatarUrl', 'isExpert']
+        },
+        {
+          model: Comment,
+          include: [{
+            model: User,
+            attributes: ['name', 'avatarUrl', 'isExpert']
+          }],
+          order: [['createdAt', 'DESC']]
+        }
+      ]
     });
     
     if (!post) {
@@ -201,12 +218,12 @@ const getPostById = async (req, res) => {
       return {
         id: comment.id,
         userId: comment.userId,
-        authorName: comment.authorName,
-        authorImageUrl: comment.authorImageUrl,
+        authorName: comment.User?.name || 'Anonymous',
+        authorImageUrl: comment.User?.avatarUrl,
+        isExpert: comment.User?.isExpert || false,
         content: comment.content,
         timestamp: comment.createdAt,
         timeAgo: _getTimeAgo(comment.createdAt),
-        isExpert: comment.isExpert,
         helpfulCount: comment.helpfulCount,
         isLikedByCurrentUser: isCommentLikedByCurrentUser
       };
@@ -215,18 +232,19 @@ const getPostById = async (req, res) => {
     res.json({
       id: post.id,
       userId: post.userId,
-      authorName: post.authorName,
-      authorLocation: post.authorLocation,
-      authorImageUrl: post.authorImageUrl,
+      authorName: post.User?.name || 'Anonymous',
+      authorLocation: post.User?.location || 'Unknown',
+      authorImageUrl: post.User?.avatarUrl,
+      isExpert: post.User?.isExpert || false,
       timeAgo: _getTimeAgo(post.createdAt),
       title: post.title,
       content: post.content,
       postImageUrl: post.postImageUrl,
       helpfulCount: post.helpfulCount,
       commentCount: post.commentCount,
-      isExpert: post.isExpert,
       isLikedByCurrentUser: isPostLikedByCurrentUser,
       category: post.category,
+      isAnonymous: post.isAnonymous,
       comments: formattedComments
     });
 
@@ -297,13 +315,20 @@ const togglePostHelpful = async (req, res) => {
 };
 
 // Add comment to post
+// Add comment to post
 const addComment = async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, content, authorName, isExpert } = req.body;
+    const { userId, content } = req.body;
     
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });
+    }
+
+    // Verify user exists
+    const user = await User.findOne({ where: { uid: userId } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
     const post = await Post.findByPk(id);
@@ -315,9 +340,7 @@ const addComment = async (req, res) => {
     const comment = await Comment.create({
       userId,
       postId: post.id,
-      authorName: authorName || 'Anonymous',
       content,
-      isExpert: isExpert === 'true',
       helpfulCount: 0
     });
 
@@ -325,16 +348,24 @@ const addComment = async (req, res) => {
     post.commentCount += 1;
     await post.save();
 
+    // Fetch created comment with user data
+    const createdComment = await Comment.findByPk(comment.id, {
+      include: [{
+        model: User,
+        attributes: ['name', 'avatarUrl', 'isExpert']
+      }]
+    });
+
     res.status(201).json({
-      id: comment.id,
-      userId: comment.userId,
-      authorName: comment.authorName,
-      authorImageUrl: comment.authorImageUrl,
-      content: comment.content,
-      timestamp: comment.createdAt,
-      timeAgo: _getTimeAgo(comment.createdAt),
-      isExpert: comment.isExpert,
-      helpfulCount: comment.helpfulCount,
+      id: createdComment.id,
+      userId: createdComment.userId,
+      authorName: createdComment.User?.name || 'Anonymous',
+      authorImageUrl: createdComment.User?.avatarUrl,
+      isExpert: createdComment.User?.isExpert || false,
+      content: createdComment.content,
+      timestamp: createdComment.createdAt,
+      timeAgo: _getTimeAgo(createdComment.createdAt),
+      helpfulCount: createdComment.helpfulCount,
       isLikedByCurrentUser: false
     });
 

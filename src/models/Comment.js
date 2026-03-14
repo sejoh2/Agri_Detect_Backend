@@ -20,21 +20,14 @@ const Comment = sequelize.define('Comment', {
       key: 'id'
     }
   },
-  authorName: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  authorImageUrl: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
+  // REMOVE these fields - they'll come from Users table
+  // authorName: { type: DataTypes.STRING, allowNull: false },
+  // authorImageUrl: { type: DataTypes.STRING, allowNull: true },
+  // isExpert: { type: DataTypes.BOOLEAN, defaultValue: false },
+  
   content: {
     type: DataTypes.TEXT,
     allowNull: false
-  },
-  isExpert: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
   },
   helpfulCount: {
     type: DataTypes.INTEGER,

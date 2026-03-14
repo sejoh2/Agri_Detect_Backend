@@ -12,18 +12,12 @@ const Post = sequelize.define('Post', {
     allowNull: false,
     comment: 'Firebase user ID'
   },
-  authorName: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  authorLocation: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
-  authorImageUrl: {
-    type: DataTypes.STRING,
-    allowNull: true
-  },
+  // REMOVE these fields - they'll come from Users table
+  // authorName: { type: DataTypes.STRING, allowNull: false },
+  // authorLocation: { type: DataTypes.STRING, allowNull: false },
+  // authorImageUrl: { type: DataTypes.STRING, allowNull: true },
+  // isExpert: { type: DataTypes.BOOLEAN, defaultValue: false },
+  
   title: {
     type: DataTypes.STRING,
     allowNull: false
@@ -40,10 +34,6 @@ const Post = sequelize.define('Post', {
     type: DataTypes.STRING,
     allowNull: false,
     defaultValue: 'General'
-  },
-  isExpert: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false
   },
   isAnonymous: {
     type: DataTypes.BOOLEAN,
