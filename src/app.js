@@ -8,7 +8,8 @@ require('dotenv').config();
 const { connectDB } = require('./config/database');
 const analysisRoutes = require('./routes/analysisRoutes');
 const communityRoutes = require('./routes/communityRoutes');
-const userRoutes = require('./routes/userRoutes'); // ADD THIS
+const userRoutes = require('./routes/userRoutes');
+const outbreakRoutes = require('./routes/outbreakRoutes'); // ADD THIS
 
 const app = express();
 
@@ -30,7 +31,8 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Routes
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/community', communityRoutes);
-app.use('/api/users', userRoutes); // ADD THIS
+app.use('/api/users', userRoutes);
+app.use('/api/outbreaks', outbreakRoutes); // ADD THIS
 
 // Health check
 app.get('/health', (req, res) => {
@@ -41,6 +43,12 @@ app.get('/health', (req, res) => {
     version: '1.0.0'
   });
 });
+
+// Start outbreak scheduler after database connection
+const OutbreakScheduler = require('./jobs/outbreakScheduler');
+setTimeout(() => {
+  OutbreakScheduler.start();
+}, 5000);
 
 // 404 handler
 app.use((req, res) => {

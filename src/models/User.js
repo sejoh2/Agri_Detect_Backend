@@ -14,7 +14,7 @@ const User = sequelize.define('User', {
       name: 'users_uid_unique',
       msg: 'UID must be unique'
     },
-    comment: 'User identifier for fetching specific data'
+    comment: 'Firebase UID'
   },
   name: {
     type: DataTypes.STRING,
@@ -39,8 +39,18 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  // Display location name (e.g., "Ruiru, Kiambu")
   location: {
     type: DataTypes.STRING,
+    allowNull: true
+  },
+  // Coordinates for precise location
+  latitude: {
+    type: DataTypes.DECIMAL(10, 8),
+    allowNull: true
+  },
+  longitude: {
+    type: DataTypes.DECIMAL(11, 8),
     allowNull: true
   },
   isExpert: {
@@ -57,7 +67,6 @@ const User = sequelize.define('User', {
     defaultValue: DataTypes.NOW
   }
 }, {
-  // Add this to help with existing table conflicts
   indexes: [
     {
       unique: true,
@@ -68,6 +77,10 @@ const User = sequelize.define('User', {
       unique: true,
       fields: ['email'],
       name: 'users_email_idx'
+    },
+    // Add index for location-based queries
+    {
+      fields: ['latitude', 'longitude']
     }
   ]
 });

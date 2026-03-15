@@ -2,6 +2,8 @@ const User = require('./User');
 const Post = require('./Post');
 const Comment = require('./Comment');
 const Helpful = require('./Helpful');
+const Outbreak = require('./Outbreak'); // ADD THIS
+const DataSource = require('./DataSource'); // ADD THIS
 
 // User - Post associations
 User.hasMany(Post, { foreignKey: 'userId', sourceKey: 'uid', onDelete: 'CASCADE' });
@@ -23,9 +25,12 @@ Helpful.belongsTo(Post, { foreignKey: 'postId' });
 Comment.hasMany(Helpful, { foreignKey: 'commentId', onDelete: 'CASCADE' });
 Helpful.belongsTo(Comment, { foreignKey: 'commentId' });
 
+// ADD THESE EXPORTS
 module.exports = {
   User,
   Post,
   Comment,
-  Helpful
+  Helpful,
+  Outbreak, // ADD THIS
+  DataSource // ADD THIS
 };

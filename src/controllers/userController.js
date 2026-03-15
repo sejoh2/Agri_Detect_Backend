@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const storageService = require('../services/storageService');
+const geocodingService = require('../services/geocodingService'); // We'll create this
 const fs = require('fs');
 
 // Get user by ID, email, or uid
@@ -29,7 +30,9 @@ const getUser = async (req, res) => {
       email: user.email,
       avatarUrl: user.avatarUrl,
       phoneNumber: user.phoneNumber,
-      location: user.location
+      location: user.location,
+      latitude: user.latitude,
+      longitude: user.longitude
     });
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -40,7 +43,7 @@ const getUser = async (req, res) => {
 // Create or update user (for signup)
 const createOrUpdateUser = async (req, res) => {
   try {
-    const { uid, name, email, phoneNumber, location } = req.body;
+    const { uid, name, email, phoneNumber, location, latitude, longitude } = req.body;
     const file = req.file;
 
     if (!uid || !email) {
@@ -54,12 +57,9 @@ const createOrUpdateUser = async (req, res) => {
 
     // Upload new avatar if provided
     if (file) {
-      // Delete old avatar if exists
       if (user?.avatarUrl) {
         await storageService.deleteFile(user.avatarUrl, 'user-avatars');
       }
-      
-      // Upload new avatar to Supabase
       avatarUrl = await storageService.uploadFile(file, 'avatars', 'user-avatars');
     }
 
@@ -69,7 +69,9 @@ const createOrUpdateUser = async (req, res) => {
       email,
       avatarUrl,
       phoneNumber,
-      location
+      location,
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null
     };
 
     if (user) {
@@ -87,7 +89,9 @@ const createOrUpdateUser = async (req, res) => {
       email: user.email,
       avatarUrl: user.avatarUrl,
       phoneNumber: user.phoneNumber,
-      location: user.location
+      location: user.location,
+      latitude: user.latitude,
+      longitude: user.longitude
     });
 
   } catch (error) {
@@ -109,8 +113,8 @@ const createOrUpdateUser = async (req, res) => {
 // Update user profile by uid
 const updateUserByUid = async (req, res) => {
   try {
-    const { uid } = req.params;  // Changed from id to uid
-    const { name, phoneNumber, location } = req.body;
+    const { uid } = req.params;
+    const { name, phoneNumber, location, latitude, longitude } = req.body;
     const file = req.file;
 
     // Find user by uid
@@ -124,12 +128,9 @@ const updateUserByUid = async (req, res) => {
 
     // Upload new avatar if provided
     if (file) {
-      // Delete old avatar if exists
       if (user.avatarUrl) {
         await storageService.deleteFile(user.avatarUrl, 'user-avatars');
       }
-      
-      // Upload new avatar to Supabase
       avatarUrl = await storageService.uploadFile(file, 'avatars', 'user-avatars');
     }
 
@@ -138,6 +139,8 @@ const updateUserByUid = async (req, res) => {
       name: name || user.name,
       phoneNumber: phoneNumber !== undefined ? phoneNumber : user.phoneNumber,
       location: location !== undefined ? location : user.location,
+      latitude: latitude !== undefined ? parseFloat(latitude) : user.latitude,
+      longitude: longitude !== undefined ? parseFloat(longitude) : user.longitude,
       avatarUrl
     });
 
@@ -150,7 +153,9 @@ const updateUserByUid = async (req, res) => {
       email: user.email,
       avatarUrl: user.avatarUrl,
       phoneNumber: user.phoneNumber,
-      location: user.location
+      location: user.location,
+      latitude: user.latitude,
+      longitude: user.longitude
     });
 
   } catch (error) {
@@ -172,5 +177,5 @@ const updateUserByUid = async (req, res) => {
 module.exports = {
   getUser,
   createOrUpdateUser,
-  updateUserByUid  // Changed export name
+  updateUserByUid
 };
