@@ -22,13 +22,32 @@ const storage = multer.diskStorage({
 
 // File filter - allow images and audio
 const fileFilter = (req, file, cb) => {
+  // Log the actual MIME type for debugging
+  console.log('📁 Upload - MIME type:', file.mimetype);
+  console.log('📁 Upload - Original name:', file.originalname);
+  console.log('📁 Upload - Field name:', file.fieldname);
+
   const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-  const allowedAudioTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'audio/x-m4a', 'audio/aac'];
+  
+  // EXPANDED: Add all possible audio MIME types
+  const allowedAudioTypes = [
+    'audio/mpeg', 'audio/mp3', 
+    'audio/wav', 'audio/x-wav',
+    'audio/m4a', 'audio/x-m4a', 
+    'audio/mp4', 'audio/x-mp4',
+    'audio/aac', 'audio/aacp',
+    'audio/ogg', 'audio/webm',
+    'audio/3gpp', 'audio/3gpp2',
+    'audio/amr', 'audio/x-amr'
+  ];
+  
   const allowedTypes = [...allowedImageTypes, ...allowedAudioTypes];
 
   if (allowedTypes.includes(file.mimetype)) {
+    console.log('✅ File type accepted:', file.mimetype);
     cb(null, true);
   } else {
+    console.log('❌ File type rejected:', file.mimetype);
     cb(new Error('Invalid file type. Only images and audio files are allowed.'), false);
   }
 };
